@@ -12,12 +12,6 @@ from google.cloud.tasks_v2.proto import cloudtasks_pb2_grpc
 from google.cloud.tasks_v2.proto import queue_pb2
 from google.cloud.tasks_v2.proto import task_pb2
 
-root = logging.getLogger()
-root.setLevel(logging.DEBUG)
-
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.DEBUG)
-
 
 Queue = queue_pb2.Queue
 Task = task_pb2.Task

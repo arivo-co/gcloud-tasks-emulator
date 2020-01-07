@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import logging
 import sys
 
 from gcloud_tasks_emulator.server.server import create_server
@@ -22,10 +23,17 @@ if __name__ == '__main__':
     start.add_argument(
         "--port", type=int, help='the port to run the server on', default=DEFAULT_PORT
     )
+    start.add_argument("--quiet", action="store_true", default=False)
 
     args = parser.parse_args()
     if args.subcommand != "start":
         parser.print_usage()
         sys.exit(1)
+
+    root = logging.getLogger()
+
+    if not args.quiet:
+        handler = logging.StreamHandler(sys.stdout)
+        root.setLevel(logging.DEBUG)
 
     sys.exit(main("localhost", args.port))
