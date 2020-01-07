@@ -1,4 +1,5 @@
 
+from datetime import datetime
 import logging
 import sys
 import time
@@ -25,14 +26,23 @@ class QueueState(object):
 
     def __init__(self):
         self._queues = {}
+        self._queue_tasks = {}
 
     def create_queue(self, name, **options):
         if name not in self._queues:
             self._queues[name] = Queue(name=name)
+            self._queue_tasks[name] = []
             return self._queues[name]
 
-    def push_task(self, queue, task):
-        pass
+    def create_task(self, queue, task):
+        queue_name = queue.rsplit("/", 1)[-1]
+        task_name = task.name or "%s/tasks/%s" % (
+            queue, int(datetime.now().timestamp())
+        )
+
+        new_task = Task(name=task_name)
+        self._queue_tasks[queue_name].append(new_task)
+        return new_task
 
     def queue_names(self):
         return list(self._queues)
@@ -67,6 +77,9 @@ class Greeter(cloudtasks_pb2_grpc.CloudTasksServicer):
         queue_name = request.name.rsplit("/", 1)[-1]
         self._state.delete_queue(queue_name)
         return empty_pb2.Empty()
+
+    def CreateTask(self, request, context):
+        return self._state.create_task(request.parent, request.task)
 
 
 class APIThread(threading.Thread):

@@ -62,6 +62,23 @@ class TestCase(BaseTestCase):
         queues = self._client.list_queues(parent=self._parent)
         self.assertEqual(len(list(queues)), 1)
 
+    def test_create_task(self):
+        self.test_create_queue()  # Create a couple of queues
+
+        path = self._client.queue_path('[PROJECT]', '[LOCATION]', "test_queue2")
+        payload = "Hello World!"
+
+        task = {
+            'app_engine_http_request': {  # Specify the type of request.
+                'http_method': 'POST',
+                'relative_uri': '/example_task_handler',
+                'body': payload.encode()
+            }
+        }
+
+        response = self._client.create_task(path, task)
+        self.assertTrue(response.name.startswith(path))
+
 
 if __name__ == '__main__':
     unittest.main()
