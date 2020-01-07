@@ -117,22 +117,47 @@ class Processor(threading.Thread):
 
         self._state = state
         self._is_running = threading.Event()
+        self._known_queues = set()
+        self._queue_threads = {}
 
     def run(self):
         self._is_running.set()
 
-        logging.info("[API] Starting task processor")
+        logging.info("[PROCESSOR] Starting task processor")
         while self._is_running.is_set():
             queue_names = self._state.queue_names()
             for queue in queue_names:
                 self.process_queue(queue)
                 time.sleep(0)
 
-    def process_queue(self, queue_name):
+    def _submit_task(self, task):
+        logging.debug("[PROCESSOR] submitting task %s", task)
         pass
+
+    def _process_queue(self, queue):
+        while True:
+            tasks = self._state._queue_tasks[queue]
+            while tasks:
+                task = tasks.pop(0)
+                self._submit_task(task)
+            time.sleep(0)
+
+    def process_queue(self, queue_name):
+        if queue_name not in self._known_queues:
+            # A queue was just created
+            self._known_queues.add(queue_name)
+
+            thread = threading.Thread(
+                target=self._process_queue, args=[queue_name]
+            )
+            self._queue_threads[queue_name] = thread
+            self._queue_threads[queue_name].start()
 
     def join(self, timeout=None):
         self._is_running.clear()
+        for thread in self._queue_threads:
+            thread.join(0)
+
         super().join(timeout)
 
 

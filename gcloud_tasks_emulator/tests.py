@@ -1,7 +1,7 @@
 import unittest
 from unittest import TestCase as BaseTestCase
 
-from server.server import create_server
+from server import create_server
 
 from google.cloud.tasks_v2 import CloudTasksClient
 from google.cloud.tasks_v2.gapic.transports.cloud_tasks_grpc_transport import CloudTasksGrpcTransport

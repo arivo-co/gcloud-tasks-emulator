@@ -4,7 +4,7 @@ import argparse
 import logging
 import sys
 
-from gcloud_tasks_emulator.server.server import create_server
+from gcloud_tasks_emulator.server import create_server
 
 # Random, apparently not often used
 DEFAULT_PORT = 9022
