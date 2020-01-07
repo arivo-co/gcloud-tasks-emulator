@@ -87,9 +87,11 @@ class APIThread(threading.Thread):
     def run(self):
         self._httpd = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
         cloudtasks_pb2_grpc.add_CloudTasksServicer_to_server(Greeter(self._state), self._httpd)
-        self._httpd.add_insecure_port('[::]:%s' % self._port)
 
-        logging.info("[API] Starting API server")
+        interface = '[::]:%s' % self._port
+        self._httpd.add_insecure_port(interface)
+
+        logging.info("[API] Starting API server at %s", interface)
         self._httpd.start()
 
         while self._is_running.is_set():

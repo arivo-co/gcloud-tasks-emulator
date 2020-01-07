@@ -16,7 +16,7 @@ def main(host, port):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Google Cloud Task Emulator')
-    subparsers = parser.add_subparsers(title='subcommands')
+    subparsers = parser.add_subparsers(title='subcommands', dest="subcommand")
 
     start = subparsers.add_parser('start', help='start the emulator')
     start.add_argument(
@@ -24,4 +24,8 @@ if __name__ == '__main__':
     )
 
     args = parser.parse_args()
+    if args.subcommand != "start":
+        parser.print_usage()
+        sys.exit(1)
+
     sys.exit(main("localhost", args.port))
