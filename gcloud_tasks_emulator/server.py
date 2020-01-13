@@ -159,10 +159,12 @@ class Processor(threading.Thread):
             if queue not in self._state._queue_tasks:
                 break
 
-            tasks = self._state._queue_tasks[queue]
-            while tasks:
-                task = tasks.pop(0)
-                self._submit_task(task)
+            if self._state.queue(queue).state == queue_pb2._QUEUE_STATE.values_by_name["RUNNING"].number:
+                tasks = self._state._queue_tasks[queue]
+                while tasks:
+                    task = tasks.pop(0)
+                    self._submit_task(task)
+
             time.sleep(0)
 
     def process_queue(self, queue_name):
