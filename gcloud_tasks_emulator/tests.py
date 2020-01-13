@@ -38,6 +38,9 @@ class TestCase(BaseTestCase):
         self.assertEqual(ret.name, "test_queue2")
 
     def test_list_queues(self):
+        path = self._client.queue_path('[PROJECT]', '[LOCATION]', "default")
+        self._client.delete_queue(path)
+
         self.test_create_queue()  # Create a couple of queues
 
         queues = self._client.list_queues(parent=self._parent)
@@ -51,6 +54,9 @@ class TestCase(BaseTestCase):
         self.assertEqual(queue.name, "test_queue2")
 
     def test_delete_queue(self):
+        path = self._client.queue_path('[PROJECT]', '[LOCATION]', "default")
+        self._client.delete_queue(path)
+
         self.test_create_queue()  # Create a couple of queues
 
         queues = self._client.list_queues(parent=self._parent)

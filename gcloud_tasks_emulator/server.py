@@ -155,8 +155,9 @@ class Processor(threading.Thread):
 
     def join(self, timeout=None):
         self._is_running.clear()
-        for thread in self._queue_threads:
-            thread.join(0)
+        for thread in self._queue_threads.values():
+            if thread.is_alive():
+                thread.join(0)
 
         super().join(timeout)
 
@@ -164,6 +165,10 @@ class Processor(threading.Thread):
 class Server(object):
     def __init__(self, host, port):
         self._state = QueueState()
+
+        # Always start with a default queue (like App Engine)
+        self._state.create_queue("default")
+
         self._api = APIThread(self._state, host, port)
         self._processor = Processor(self._state)
 
