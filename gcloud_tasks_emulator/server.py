@@ -80,6 +80,28 @@ class QueueState(object):
         if name in self._queue_tasks:
             del self._queue_tasks[name]
 
+    def submit_task(self, task_name):
+        def make_task_request(task):
+            pass
+
+        index = None
+        queue_name = task_name.rsplit("/")[-3]
+        for i, task in enumerate(self._queue_tasks[queue_name]):
+            if task.name == task_name:
+                index = i
+                break
+        else:
+            logging.debug("Task not found: %s", task_name)
+            return
+
+        task = self._queue_tasks[queue_name].pop(index)  # Remove the task we found
+        make_task_request(task)
+
+        # FIXME: Do submission and requeue the task if it fails
+        # FIXME: Set task.first_attempt / last_attempt and other metadata
+
+        return task
+
 
 class Greeter(cloudtasks_pb2_grpc.CloudTasksServicer):
     def __init__(self, state):
@@ -115,6 +137,9 @@ class Greeter(cloudtasks_pb2_grpc.CloudTasksServicer):
 
     def CreateTask(self, request, context):
         return self._state.create_task(request.parent, request.task)
+
+    def RunTask(self, request, context):
+        return self._state.submit_task(request.name)
 
 
 class APIThread(threading.Thread):
@@ -182,7 +207,7 @@ class Processor(threading.Thread):
                 tasks = self._state._queue_tasks[queue]
                 while tasks:
                     task = tasks.pop(0)
-                    self._submit_task(task)
+                    self._state.submit_task(task.name)
 
             time.sleep(0)
 
