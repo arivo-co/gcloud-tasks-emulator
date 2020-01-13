@@ -30,7 +30,10 @@ class QueueState(object):
 
     def create_queue(self, name, **options):
         if name not in self._queues:
-            self._queues[name] = Queue(name=name)
+            self._queues[name] = Queue(
+                name=name,
+                state=queue_pb2._QUEUE_STATE.values_by_name["RUNNING"].number
+            )
             self._queue_tasks[name] = []
             return self._queues[name]
 
@@ -44,6 +47,12 @@ class QueueState(object):
         self._queue_tasks[queue_name].append(new_task)
         return new_task
 
+    def pause_queue(self, queue):
+        queue_name = queue.rsplit("/", 1)[-1]
+        if queue_name in self._queues:
+            self._queues[queue_name].state = queue_pb2._QUEUE_STATE.values_by_name["PAUSED"].number
+            return self._queues[queue_name]
+
     def queue_names(self):
         return list(self._queues)
 
@@ -54,7 +63,11 @@ class QueueState(object):
         return self._queues[name]
 
     def delete_queue(self, name):
-        del self._queues[name]
+        if name in self._queues:
+            del self._queues[name]
+
+        if name in self._queue_tasks:
+            del self._queue_tasks[name]
 
 
 class Greeter(cloudtasks_pb2_grpc.CloudTasksServicer):
@@ -72,6 +85,9 @@ class Greeter(cloudtasks_pb2_grpc.CloudTasksServicer):
     def GetQueue(self, request, context):
         queue_name = request.name.rsplit("/", 1)[-1]
         return self._state.queue(queue_name)
+
+    def PauseQueue(self, request, context):
+        return self._state.pause_queue(request.name)
 
     def DeleteQueue(self, request, context):
         queue_name = request.name.rsplit("/", 1)[-1]
@@ -135,7 +151,14 @@ class Processor(threading.Thread):
         pass
 
     def _process_queue(self, queue):
-        while True:
+        while self._is_running.is_set():
+            # Queue was deleted, stop processing
+            if queue not in self._state._queues:
+                break
+
+            if queue not in self._state._queue_tasks:
+                break
+
             tasks = self._state._queue_tasks[queue]
             while tasks:
                 task = tasks.pop(0)
@@ -157,7 +180,7 @@ class Processor(threading.Thread):
         self._is_running.clear()
         for thread in self._queue_threads.values():
             if thread.is_alive():
-                thread.join(0)
+                thread.join(timeout=0)
 
         super().join(timeout)
 
