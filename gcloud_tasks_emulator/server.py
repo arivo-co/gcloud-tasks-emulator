@@ -47,11 +47,22 @@ class QueueState(object):
         self._queue_tasks[queue_name].append(new_task)
         return new_task
 
+    def purge_queue(self, queue):
+        queue_name = queue.rsplit("/", 1)[-1]
+        if queue_name in self._queues:
+            # Wipe the tasks out
+            self._queue_tasks[queue_name] = []
+            return self._queues[queue_name]
+
     def pause_queue(self, queue):
         queue_name = queue.rsplit("/", 1)[-1]
         if queue_name in self._queues:
             self._queues[queue_name].state = queue_pb2._QUEUE_STATE.values_by_name["PAUSED"].number
             return self._queues[queue_name]
+
+    def list_tasks(self, queue):
+        queue_name = queue.rsplit("/", 1)[-1]
+        return self._queue_tasks[queue_name]
 
     def queue_names(self):
         return list(self._queues)
@@ -88,6 +99,14 @@ class Greeter(cloudtasks_pb2_grpc.CloudTasksServicer):
 
     def PauseQueue(self, request, context):
         return self._state.pause_queue(request.name)
+
+    def PurgeQueue(self, request, context):
+        return self._state.purge_queue(request.name)
+
+    def ListTasks(self, request, context):
+        return cloudtasks_pb2.ListTasksResponse(
+            tasks=self._state.list_tasks(request.parent)
+        )
 
     def DeleteQueue(self, request, context):
         queue_name = request.name.rsplit("/", 1)[-1]

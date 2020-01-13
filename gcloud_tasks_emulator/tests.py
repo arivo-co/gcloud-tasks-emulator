@@ -78,6 +78,41 @@ class TestCase(BaseTestCase):
         response = self._client.pause_queue(path)
         self.assertEqual(response.state, 2)
 
+    def test_purge_queue(self):
+        self.test_create_queue()  # Create a couple of queues
+
+        path = self._client.queue_path('[PROJECT]', '[LOCATION]', "test_queue2")
+
+        # Pause the queue as we don't want tasks to be processed
+        self._client.pause_queue(path)
+
+        payload = "Hello World!"
+
+        task = {
+            'app_engine_http_request': {  # Specify the type of request.
+                'http_method': 'POST',
+                'relative_uri': '/example_task_handler',
+                'body': payload.encode()
+            }
+        }
+
+        # Create 3 tasks
+        self._client.create_task(path, task)
+        self._client.create_task(path, task)
+        self._client.create_task(path, task)
+
+        tasks = [x for x in self._client.list_tasks(path)]
+        self.assertEqual(len(tasks), 3)
+
+        # Check again, make sure list_tasks didn't do anything
+        tasks = [x for x in self._client.list_tasks(path)]
+        self.assertEqual(len(tasks), 3)
+
+        self._client.purge_queue(path)
+
+        tasks = [x for x in self._client.list_tasks(path)]
+        self.assertEqual(len(tasks), 0)
+
     def test_create_task(self):
         self.test_create_queue()  # Create a couple of queues
 
