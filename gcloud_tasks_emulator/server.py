@@ -12,6 +12,7 @@ from google.cloud.tasks_v2.proto import cloudtasks_pb2
 from google.cloud.tasks_v2.proto import cloudtasks_pb2_grpc
 from google.cloud.tasks_v2.proto import queue_pb2
 from google.cloud.tasks_v2.proto import task_pb2
+from google.api_core.exceptions import NotFound
 
 
 Queue = queue_pb2.Queue
@@ -89,14 +90,20 @@ class QueueState(object):
             pass
 
         index = None
-        queue_name = task_name.rsplit("/")[-3]
+        try:
+            queue_name = task_name.rsplit("/")[-3]
+            if queue_name not in self._queue_tasks:
+                raise ValueError("Not a valid queue")
+        except IndexError:
+            # Invalid task name, raise ValueError
+            raise ValueError()
+
         for i, task in enumerate(self._queue_tasks[queue_name]):
             if task.name == task_name:
                 index = i
                 break
         else:
-            logging.debug("Task not found: %s", task_name)
-            return
+            raise NotFound("Task not found: %s" % task_name)
 
         task = self._queue_tasks[queue_name].pop(index)  # Remove the task we found
         make_task_request(task)
@@ -104,6 +111,7 @@ class QueueState(object):
         # FIXME: Do submission and requeue the task if it fails
         # FIXME: Set task.first_attempt / last_attempt and other metadata
 
+        assert(task)
         return task
 
 
@@ -208,7 +216,7 @@ class Processor(threading.Thread):
                 break
 
             if self._state.queue(queue).state == queue_pb2._QUEUE_STATE.values_by_name["RUNNING"].number:
-                tasks = self._state._queue_tasks[queue]
+                tasks = self._state._queue_tasks[queue][:]
                 while tasks:
                     task = tasks.pop(0)
                     self._state.submit_task(task.name)

@@ -7,6 +7,7 @@ from google.cloud.tasks_v2 import CloudTasksClient
 from google.cloud.tasks_v2.gapic.transports.cloud_tasks_grpc_transport import CloudTasksGrpcTransport
 
 from google.api_core.client_options import ClientOptions
+from google.api_core.exceptions import Unknown
 
 import grpc
 import time
@@ -150,6 +151,13 @@ class TestCase(BaseTestCase):
         self.assertTrue(response.name.startswith(path))
 
         self._client.run_task(response.name)
+
+        # Should return NOT_FOUND
+        self.assertRaises(
+            Unknown,
+            self._client.run_task,
+            "%s/tasks/1119129292929292929" % path,  # Not a valid task
+        )
 
 if __name__ == '__main__':
     unittest.main()
