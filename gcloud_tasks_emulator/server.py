@@ -35,7 +35,7 @@ class QueueState(object):
                 state=queue_pb2._QUEUE_STATE.values_by_name["RUNNING"].number
             )
             self._queue_tasks[name] = []
-            return self._queues[name]
+        return self._queues[name]
 
     def create_task(self, queue, task):
         queue_name = queue.rsplit("/", 1)[-1]
@@ -53,12 +53,16 @@ class QueueState(object):
             # Wipe the tasks out
             self._queue_tasks[queue_name] = []
             return self._queues[queue_name]
+        else:
+            raise ValueError()
 
     def pause_queue(self, queue):
         queue_name = queue.rsplit("/", 1)[-1]
         if queue_name in self._queues:
             self._queues[queue_name].state = queue_pb2._QUEUE_STATE.values_by_name["PAUSED"].number
             return self._queues[queue_name]
+        else:
+            raise ValueError()
 
     def list_tasks(self, queue):
         queue_name = queue.rsplit("/", 1)[-1]
