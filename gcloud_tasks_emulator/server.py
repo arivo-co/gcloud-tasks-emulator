@@ -229,6 +229,7 @@ class Processor(threading.Thread):
                 tasks = self._state._queue_tasks[queue][:]
                 while tasks:
                     task = tasks.pop(0)
+                    logging.info("[TASKS] Processing next task %s", task.name)
                     self._state.submit_task(task.name)
 
             time.sleep(0)
