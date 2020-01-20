@@ -113,6 +113,10 @@ class QueueState(object):
                 index = i
                 break
         else:
+            logger.debug(
+                "[TASKS] Tasks were: %s",
+                [x.name for x in self._queue_tasks[queue_name]]
+            )
             raise NotFound("Task not found: %s" % task_name)
 
         task = self._queue_tasks[queue_name].pop(index)  # Remove the task we found
@@ -229,7 +233,7 @@ class Processor(threading.Thread):
                 tasks = self._state._queue_tasks[queue][:]
                 while tasks:
                     task = tasks.pop(0)
-                    logging.info("[TASKS] Processing next task %s", task.name)
+                    logger.info("[TASKS] Processing next task %s", task.name)
                     self._state.submit_task(task.name)
 
             time.sleep(0)
