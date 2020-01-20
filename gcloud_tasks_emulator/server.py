@@ -19,6 +19,9 @@ Queue = queue_pb2.Queue
 Task = task_pb2.Task
 
 
+logger = logging.getLogger("gcloud-tasks-emulator")
+
+
 class QueueState(object):
     """
         Keeps the state of queues and tasks in memory
@@ -36,7 +39,7 @@ class QueueState(object):
                 state=queue_pb2._QUEUE_STATE.values_by_name["RUNNING"].number
             )
             self._queue_tasks[name] = []
-            logging.info("[TASKS] Created queue %s", name)
+            logger.info("[TASKS] Created queue %s", name)
 
         return self._queues[name]
 
@@ -48,14 +51,14 @@ class QueueState(object):
 
         new_task = Task(name=task_name)
         self._queue_tasks[queue_name].append(new_task)
-        logging.info("[TASKS] Created task %s", task_name)
+        logger.info("[TASKS] Created task %s", task_name)
         return new_task
 
     def purge_queue(self, queue):
         queue_name = queue.rsplit("/", 1)[-1]
         if queue_name in self._queues:
             # Wipe the tasks out
-            logging.info("[TASKS] Purging queue %s", queue_name)
+            logger.info("[TASKS] Purging queue %s", queue_name)
             self._queue_tasks[queue_name] = []
             return self._queues[queue_name]
         else:
@@ -64,7 +67,7 @@ class QueueState(object):
     def pause_queue(self, queue):
         queue_name = queue.rsplit("/", 1)[-1]
         if queue_name in self._queues:
-            logging.info("[TASKS] Pausing queue %s", queue_name)
+            logger.info("[TASKS] Pausing queue %s", queue_name)
             self._queues[queue_name].state = queue_pb2._QUEUE_STATE.values_by_name["PAUSED"].number
             return self._queues[queue_name]
         else:
@@ -85,7 +88,7 @@ class QueueState(object):
 
     def delete_queue(self, name):
         if name in self._queues:
-            logging.info("[TASKS] Deleting queue %s", name)
+            logger.info("[TASKS] Deleting queue %s", name)
             del self._queues[name]
 
         if name in self._queue_tasks:
@@ -93,7 +96,7 @@ class QueueState(object):
 
     def submit_task(self, task_name):
         def make_task_request(task):
-            logging.info("[TASKS] Submitting task %s", task_name)
+            logger.info("[TASKS] Submitting task %s", task_name)
             pass
 
         index = None
@@ -177,7 +180,7 @@ class APIThread(threading.Thread):
         interface = '[::]:%s' % self._port
         self._httpd.add_insecure_port(interface)
 
-        logging.info("[API] Starting API server at %s", interface)
+        logger.info("[API] Starting API server at %s", interface)
         self._httpd.start()
 
         while self._is_running.is_set():
@@ -187,7 +190,7 @@ class APIThread(threading.Thread):
         self._is_running.clear()
         if self._httpd:
             self._httpd.stop(grace=0)
-        logging.info("[API] Stopping API server")
+        logger.info("[API] Stopping API server")
 
 
 class Processor(threading.Thread):
@@ -202,7 +205,7 @@ class Processor(threading.Thread):
     def run(self):
         self._is_running.set()
 
-        logging.info("[PROCESSOR] Starting task processor")
+        logger.info("[PROCESSOR] Starting task processor")
         while self._is_running.is_set():
             queue_names = self._state.queue_names()
             for queue in queue_names:
@@ -272,7 +275,7 @@ class Server(object):
         try:
             self.start()
 
-            logging.info("[SERVER] All services started")
+            logger.info("[SERVER] All services started")
 
             while True:
                 try:
