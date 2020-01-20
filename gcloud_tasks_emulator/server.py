@@ -36,6 +36,8 @@ class QueueState(object):
                 state=queue_pb2._QUEUE_STATE.values_by_name["RUNNING"].number
             )
             self._queue_tasks[name] = []
+            logging.info("[TASKS] Created queue %s", name)
+
         return self._queues[name]
 
     def create_task(self, queue, task):
@@ -46,12 +48,14 @@ class QueueState(object):
 
         new_task = Task(name=task_name)
         self._queue_tasks[queue_name].append(new_task)
+        logging.info("[TASKS] Created task %s", task_name)
         return new_task
 
     def purge_queue(self, queue):
         queue_name = queue.rsplit("/", 1)[-1]
         if queue_name in self._queues:
             # Wipe the tasks out
+            logging.info("[TASKS] Purging queue %s", queue_name)
             self._queue_tasks[queue_name] = []
             return self._queues[queue_name]
         else:
@@ -60,6 +64,7 @@ class QueueState(object):
     def pause_queue(self, queue):
         queue_name = queue.rsplit("/", 1)[-1]
         if queue_name in self._queues:
+            logging.info("[TASKS] Pausing queue %s", queue_name)
             self._queues[queue_name].state = queue_pb2._QUEUE_STATE.values_by_name["PAUSED"].number
             return self._queues[queue_name]
         else:
@@ -80,6 +85,7 @@ class QueueState(object):
 
     def delete_queue(self, name):
         if name in self._queues:
+            logging.info("[TASKS] Deleting queue %s", name)
             del self._queues[name]
 
         if name in self._queue_tasks:
@@ -87,6 +93,7 @@ class QueueState(object):
 
     def submit_task(self, task_name):
         def make_task_request(task):
+            logging.info("[TASKS] Submitting task %s", task_name)
             pass
 
         index = None
