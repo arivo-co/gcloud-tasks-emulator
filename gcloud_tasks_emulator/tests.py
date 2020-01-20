@@ -1,4 +1,9 @@
 import unittest
+import sleuth
+import contextlib
+import http.server
+import socketserver
+
 from unittest import TestCase as BaseTestCase
 
 from server import create_server
@@ -11,6 +16,42 @@ from google.api_core.exceptions import Unknown
 
 import grpc
 import time
+import threading
+import os
+
+
+TEST_PORT = 9080
+os.environ["APP_ENGINE_TARGET_PORT"] = str(TEST_PORT)
+
+
+@contextlib.contextmanager
+def fake_handler(status_code=200, content="OK"):
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self, *args, **kwargs):
+            self.send_response(status_code, content)
+
+        def do_POST(self, *args, **kwargs):
+            self.send_response(status_code, content)
+
+    server_run = None
+    thread = None
+    try:
+        with socketserver.TCPServer(("", TEST_PORT), Handler) as httpd:  # FIXME: port
+            def server_run():
+                while server_run.running:
+                    httpd.handle_request()
+            server_run.running = True
+
+            thread = threading.Thread(target=server_run)
+            thread.start()
+            time.sleep(1)
+            yield
+    finally:
+        if server_run:
+            server_run.running = False
+
+        if thread:
+            thread.join()
 
 
 class TestCase(BaseTestCase):
@@ -150,7 +191,8 @@ class TestCase(BaseTestCase):
         response = self._client.create_task(path, task)
         self.assertTrue(response.name.startswith(path))
 
-        self._client.run_task(response.name)
+        with fake_handler(content=str(response)):
+            self._client.run_task(response.name)
 
         # Should return NOT_FOUND
         self.assertRaises(

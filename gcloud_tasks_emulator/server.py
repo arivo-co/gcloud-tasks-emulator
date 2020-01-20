@@ -5,8 +5,9 @@ import sys
 import time
 import threading
 import grpc
+import os
 from concurrent import futures
-
+from urllib import request, parse
 from google.protobuf import empty_pb2
 from google.cloud.tasks_v2.proto import cloudtasks_pb2
 from google.cloud.tasks_v2.proto import cloudtasks_pb2_grpc
@@ -45,14 +46,13 @@ class QueueState(object):
 
     def create_task(self, queue, task):
         queue_name = queue.rsplit("/", 1)[-1]
-        task_name = task.name or "%s/tasks/%s" % (
+        task.name = task.name or "%s/tasks/%s" % (
             queue, int(datetime.now().timestamp())
         )
 
-        new_task = Task(name=task_name)
-        self._queue_tasks[queue_name].append(new_task)
-        logger.info("[TASKS] Created task %s", task_name)
-        return new_task
+        self._queue_tasks[queue_name].append(task)
+        logger.info("[TASKS] Created task %s", task.name)
+        return task
 
     def purge_queue(self, queue):
         queue_name = queue.rsplit("/", 1)[-1]
@@ -95,11 +95,6 @@ class QueueState(object):
             del self._queue_tasks[name]
 
     def submit_task(self, task_name):
-        def make_task_request(task):
-            logger.info("[TASKS] Submitting task %s", task_name)
-            pass
-
-        index = None
         try:
             queue_name = task_name.rsplit("/")[-3]
             if queue_name not in self._queue_tasks:
@@ -107,6 +102,40 @@ class QueueState(object):
         except IndexError:
             # Invalid task name, raise ValueError
             raise ValueError()
+
+        def make_task_request(task):
+            logger.info("[TASKS] Submitting task %s", task_name)
+
+            headers = {}
+            data = None
+
+            if task.app_engine_http_request:
+                print(task.app_engine_http_request.http_method)
+
+                if task.app_engine_http_request.http_method == "POST":
+                    data = parse.urlencode(task.body).encode()
+
+                url = "http://127.0.0.1:%s/%s" % (
+                    int(os.environ.get("APP_ENGINE_TARGET_PORT", "80")),
+                    task.app_engine_http_request.relative_uri  # FIXME: Port number...
+                )
+
+                headers.update({
+                    'X-AppEngine-QueueName': queue_name,
+                    'X-AppEngine-TaskName': task.name.rsplit("/", 1)[-1],
+                    'X-AppEngine-TaskRetryCount': 0,  # FIXME: Populate
+                    'X-AppEngine-TaskExecutionCount': 0,  # FIXME: Populate
+                    'X-AppEngine-TaskETA': 0,  # FIXME: Populate
+                })
+            else:
+                assert(task.http_request)  # FIXME:
+                pass
+
+            req = request.Request(url, data=data)
+            resp = request.urlopen(req)
+
+        index = None
+
 
         for i, task in enumerate(self._queue_tasks[queue_name]):
             if task.name == task_name:
@@ -215,10 +244,6 @@ class Processor(threading.Thread):
             for queue in queue_names:
                 self.process_queue(queue)
                 time.sleep(0)
-
-    def _submit_task(self, task):
-        logging.debug("[PROCESSOR] submitting task %s", task)
-        pass
 
     def _process_queue(self, queue):
         while self._is_running.is_set():
