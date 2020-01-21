@@ -13,43 +13,11 @@ from google.cloud.tasks_v2.gapic.transports.cloud_tasks_grpc_transport import Cl
 from google.api_core.client_options import ClientOptions
 from google.api_core.exceptions import Unknown
 
+import sleuth
 import grpc
 import time
 import threading
 import os
-
-
-TEST_PORT = 9080
-os.environ["APP_ENGINE_TARGET_PORT"] = str(TEST_PORT)
-
-@contextlib.contextmanager
-def fake_handler(status_code=200, content="OK"):
-    class Handler(http.server.SimpleHTTPRequestHandler):
-        def do_GET(self, *args, **kwargs):
-            self.send_response(status_code, content)
-
-        def do_POST(self, *args, **kwargs):
-            self.send_response(status_code, content)
-
-    server_run = None
-    thread = None
-    try:
-        with socketserver.TCPServer(("", TEST_PORT), Handler) as httpd:  # FIXME: port
-            def server_run():
-                while server_run.running:
-                    httpd.handle_request()
-            server_run.running = True
-
-            thread = threading.Thread(target=server_run)
-            thread.start()
-            time.sleep(1)
-            yield
-    finally:
-        if server_run:
-            server_run.running = False
-
-        if thread:
-            thread.join()
 
 
 class TestCase(BaseTestCase):
@@ -157,6 +125,8 @@ class TestCase(BaseTestCase):
         self.test_create_queue()  # Create a couple of queues
 
         path = self._client.queue_path('[PROJECT]', '[LOCATION]', "test_queue2")
+
+        self._client.pause_queue(path)
         payload = "Hello World!"
 
         task = {
@@ -189,7 +159,7 @@ class TestCase(BaseTestCase):
         response = self._client.create_task(path, task)
         self.assertTrue(response.name.startswith(path))
 
-        with fake_handler(content=str(response)):
+        with sleuth.fake("server._make_task_request", return_value=None) as fake:
             self._client.run_task(response.name)
 
         # Should return NOT_FOUND
@@ -198,6 +168,7 @@ class TestCase(BaseTestCase):
             self._client.run_task,
             "%s/tasks/1119129292929292929" % path,  # Not a valid task
         )
+
 
 if __name__ == '__main__':
     unittest.main()

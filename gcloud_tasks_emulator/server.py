@@ -22,6 +22,38 @@ Task = task_pb2.Task
 logger = logging.getLogger("gcloud-tasks-emulator")
 
 
+def _make_task_request(queue_name, task):
+    logger.info("[TASKS] Submitting task %s", task.name)
+
+    headers = {}
+    data = None
+
+    if task.app_engine_http_request:
+        print(task.app_engine_http_request.http_method)
+
+        if task.app_engine_http_request.http_method == "POST":
+            data = parse.urlencode(task.body).encode()
+
+        url = "http://127.0.0.1:%s/%s" % (
+            int(os.environ.get("APP_ENGINE_TARGET_PORT", "80")),
+            task.app_engine_http_request.relative_uri
+        )
+
+        headers.update({
+            'X-AppEngine-QueueName': queue_name,
+            'X-AppEngine-TaskName': task.name.rsplit("/", 1)[-1],
+            'X-AppEngine-TaskRetryCount': 0,  # FIXME: Populate
+            'X-AppEngine-TaskExecutionCount': 0,  # FIXME: Populate
+            'X-AppEngine-TaskETA': 0,  # FIXME: Populate
+        })
+    else:
+        assert(task.http_request)  # FIXME:
+        pass
+
+    req = request.Request(url, data=data)
+    return request.urlopen(req)
+
+
 class QueueState(object):
     """
         Keeps the state of queues and tasks in memory
@@ -106,37 +138,6 @@ class QueueState(object):
             # Invalid task name, raise ValueError
             raise ValueError()
 
-        def make_task_request(task):
-            logger.info("[TASKS] Submitting task %s", task_name)
-
-            headers = {}
-            data = None
-
-            if task.app_engine_http_request:
-                print(task.app_engine_http_request.http_method)
-
-                if task.app_engine_http_request.http_method == "POST":
-                    data = parse.urlencode(task.body).encode()
-
-                url = "http://127.0.0.1:%s/%s" % (
-                    int(os.environ.get("APP_ENGINE_TARGET_PORT", "80")),
-                    task.app_engine_http_request.relative_uri
-                )
-
-                headers.update({
-                    'X-AppEngine-QueueName': queue_name,
-                    'X-AppEngine-TaskName': task.name.rsplit("/", 1)[-1],
-                    'X-AppEngine-TaskRetryCount': 0,  # FIXME: Populate
-                    'X-AppEngine-TaskExecutionCount': 0,  # FIXME: Populate
-                    'X-AppEngine-TaskETA': 0,  # FIXME: Populate
-                })
-            else:
-                assert(task.http_request)  # FIXME:
-                pass
-
-            req = request.Request(url, data=data)
-            resp = request.urlopen(req)
-
         index = None
 
         for i, task in enumerate(self._queue_tasks[queue_name]):
@@ -151,7 +152,7 @@ class QueueState(object):
             raise NotFound("Task not found: %s" % task_name)
 
         task = self._queue_tasks[queue_name].pop(index)  # Remove the task
-        make_task_request(task)
+        _make_task_request(queue_name, task)
 
         # FIXME: Do submission and requeue the task if it fails
         # FIXME: Set task.first_attempt / last_attempt and other metadata
