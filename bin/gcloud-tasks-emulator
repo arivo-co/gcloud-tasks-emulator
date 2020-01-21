@@ -32,8 +32,9 @@ if __name__ == '__main__':
 
     root = logging.getLogger()
 
-    if not args.quiet:
-        handler = logging.StreamHandler(sys.stdout)
-        root.setLevel(logging.DEBUG)
+    if args.quiet:
+        root.setLevel(logging.CRITICAL)
+    else:
+        root.setLevel(logging.INFO)
 
     sys.exit(main("localhost", args.port))

@@ -1,5 +1,4 @@
 import unittest
-import sleuth
 import contextlib
 import http.server
 import socketserver
@@ -22,7 +21,6 @@ import os
 
 TEST_PORT = 9080
 os.environ["APP_ENGINE_TARGET_PORT"] = str(TEST_PORT)
-
 
 @contextlib.contextmanager
 def fake_handler(status_code=200, content="OK"):

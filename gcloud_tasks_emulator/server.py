@@ -1,7 +1,6 @@
 
 from datetime import datetime
 import logging
-import sys
 import time
 import threading
 import grpc
@@ -33,16 +32,18 @@ class QueueState(object):
         self._queues = {}
         self._queue_tasks = {}
 
-    def create_queue(self, name, **options):
-        if name not in self._queues:
-            self._queues[name] = Queue(
-                name=name,
-                state=queue_pb2._QUEUE_STATE.values_by_name["RUNNING"].number
-            )
-            self._queue_tasks[name] = []
-            logger.info("[TASKS] Created queue %s", name)
+    def create_queue(self, parent, queue):
+        assert(queue.name)
 
-        return self._queues[name]
+        if queue.name not in self._queues:
+            self._queues[queue.name] = queue
+            self._queues[queue.name].state = (
+                queue_pb2._QUEUE_STATE.values_by_name["RUNNING"].number
+            )
+            self._queue_tasks[queue.name] = []
+            logger.info("[TASKS] Created queue %s", queue.name)
+
+        return self._queues[queue.name]
 
     def create_task(self, queue, task):
         queue_name = queue.rsplit("/", 1)[-1]
@@ -68,7 +69,9 @@ class QueueState(object):
         queue_name = queue.rsplit("/", 1)[-1]
         if queue_name in self._queues:
             logger.info("[TASKS] Pausing queue %s", queue_name)
-            self._queues[queue_name].state = queue_pb2._QUEUE_STATE.values_by_name["PAUSED"].number
+            self._queues[queue_name].state = (
+                queue_pb2._QUEUE_STATE.values_by_name["PAUSED"].number
+            )
             return self._queues[queue_name]
         else:
             raise ValueError()
@@ -117,7 +120,7 @@ class QueueState(object):
 
                 url = "http://127.0.0.1:%s/%s" % (
                     int(os.environ.get("APP_ENGINE_TARGET_PORT", "80")),
-                    task.app_engine_http_request.relative_uri  # FIXME: Port number...
+                    task.app_engine_http_request.relative_uri
                 )
 
                 headers.update({
@@ -136,7 +139,6 @@ class QueueState(object):
 
         index = None
 
-
         for i, task in enumerate(self._queue_tasks[queue_name]):
             if task.name == task_name:
                 index = i
@@ -148,7 +150,7 @@ class QueueState(object):
             )
             raise NotFound("Task not found: %s" % task_name)
 
-        task = self._queue_tasks[queue_name].pop(index)  # Remove the task we found
+        task = self._queue_tasks[queue_name].pop(index)  # Remove the task
         make_task_request(task)
 
         # FIXME: Do submission and requeue the task if it fails
@@ -165,7 +167,7 @@ class Greeter(cloudtasks_pb2_grpc.CloudTasksServicer):
         self._state = state
 
     def CreateQueue(self, request, context):
-        return self._state.create_queue(request.queue.name)
+        return self._state.create_queue(request.parent, request.queue)
 
     def ListQueues(self, request, context):
         return cloudtasks_pb2.ListQueuesResponse(queues=self._state.queues())
@@ -208,7 +210,9 @@ class APIThread(threading.Thread):
 
     def run(self):
         self._httpd = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-        cloudtasks_pb2_grpc.add_CloudTasksServicer_to_server(Greeter(self._state), self._httpd)
+        cloudtasks_pb2_grpc.add_CloudTasksServicer_to_server(
+            Greeter(self._state), self._httpd
+        )
 
         interface = '[::]:%s' % self._port
         self._httpd.add_insecure_port(interface)
@@ -288,7 +292,7 @@ class Server(object):
         self._state = QueueState()
 
         # Always start with a default queue (like App Engine)
-        self._state.create_queue("default")
+        self._state.create_queue("", Queue(name="default"))
 
         self._api = APIThread(self._state, host, port)
         self._processor = Processor(self._state)
