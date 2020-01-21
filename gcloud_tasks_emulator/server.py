@@ -29,12 +29,9 @@ def _make_task_request(queue_name, task):
     data = None
 
     if task.app_engine_http_request:
-        print(task.app_engine_http_request.http_method)
+        data = task.app_engine_http_request.body
 
-        if task.app_engine_http_request.http_method == "POST":
-            data = parse.urlencode(task.body).encode()
-
-        url = "http://127.0.0.1:%s/%s" % (
+        url = "http://localhost:%s%s" % (
             int(os.environ.get("APP_ENGINE_TARGET_PORT", "80")),
             task.app_engine_http_request.relative_uri
         )
@@ -82,6 +79,12 @@ class QueueState(object):
         task.name = task.name or "%s/tasks/%s" % (
             queue, int(datetime.now().timestamp())
         )
+
+        if task.app_engine_http_request:
+            # Set a default http_method
+            task.app_engine_http_request.http_method = (
+                task.app_engine_http_request.http_method or "POST"
+            )
 
         self._queue_tasks[queue_name].append(task)
         logger.info("[TASKS] Created task %s", task.name)
