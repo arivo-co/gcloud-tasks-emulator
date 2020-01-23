@@ -6,7 +6,7 @@ import threading
 import grpc
 import os
 from concurrent import futures
-from urllib import request, parse
+from urllib import request, error
 from google.protobuf import empty_pb2
 from google.cloud.tasks_v2.proto import cloudtasks_pb2
 from google.cloud.tasks_v2.proto import cloudtasks_pb2_grpc
@@ -155,9 +155,12 @@ class QueueState(object):
             raise NotFound("Task not found: %s" % task_name)
 
         task = self._queue_tasks[queue_name].pop(index)  # Remove the task
-        _make_task_request(queue_name, task)
+        try:
+            _make_task_request(queue_name, task)
+        except error.HTTPError:
+            logger.info("Error submitting task, moving to the back of the queue")
+            self._queue_tasks[queue_name].append(task)
 
-        # FIXME: Do submission and requeue the task if it fails
         # FIXME: Set task.first_attempt / last_attempt and other metadata
 
         assert(task)
