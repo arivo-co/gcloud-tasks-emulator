@@ -48,6 +48,9 @@ def _make_task_request(queue_name, task):
         pass
 
     req = request.Request(url, data=data)
+    for k, v in headers.items():
+        req.add_header(k, v)
+
     return request.urlopen(req)
 
 
