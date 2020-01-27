@@ -219,7 +219,7 @@ class APIThread(threading.Thread):
         self._httpd = None
 
     def run(self):
-        self._httpd = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+        self._httpd = grpc.server(futures.ThreadPoolExecutor(max_workers=2))
         cloudtasks_pb2_grpc.add_CloudTasksServicer_to_server(
             Greeter(self._state), self._httpd
         )

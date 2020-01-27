@@ -16,6 +16,8 @@ def main(host, port):
 
 
 if __name__ == '__main__':
+    print("Starting Cloud Tasks Emulator")
+
     parser = argparse.ArgumentParser(description='Google Cloud Task Emulator')
     subparsers = parser.add_subparsers(title='subcommands', dest="subcommand")
 
@@ -31,6 +33,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     root = logging.getLogger()
+    root.addHandler(logging.StreamHandler())
 
     if args.quiet:
         root.setLevel(logging.CRITICAL)
