@@ -12,11 +12,14 @@ from google.cloud.tasks_v2.proto import cloudtasks_pb2
 from google.cloud.tasks_v2.proto import cloudtasks_pb2_grpc
 from google.cloud.tasks_v2.proto import queue_pb2
 from google.cloud.tasks_v2.proto import task_pb2
+from google.protobuf.timestamp_pb2 import Timestamp
 from google.api_core.exceptions import NotFound
+from google.rpc.status_pb2 import Status
 
 
 Queue = queue_pb2.Queue
 Task = task_pb2.Task
+Attempt = task_pb2.Attempt
 
 
 logger = logging.getLogger("gcloud-tasks-emulator")
@@ -157,14 +160,40 @@ class QueueState(object):
             )
             raise NotFound("Task not found: %s" % task_name)
 
+        def now():
+            return Timestamp(seconds=int(datetime.now().timestamp()))
+
+        schedule_time = now()
+        dispatch_time = None
+        response_time = None
+        response_status = 200
+
         task = self._queue_tasks[queue_name].pop(index)  # Remove the task
         try:
-            _make_task_request(queue_name, task)
-        except error.HTTPError:
-            logger.info("Error submitting task, moving to the back of the queue")
+            dispatch_time = now()
+            response = _make_task_request(queue_name, task)
+        except (error.HTTPError, ConnectionRefusedError):
+            response_status = 500
+            logger.info(
+                "Error submitting task, moving to the back of the queue"
+            )
             self._queue_tasks[queue_name].append(task)
+        else:
+            response_status = response.status
 
-        # FIXME: Set task.first_attempt / last_attempt and other metadata
+        attempt = Attempt(
+            schedule_time=schedule_time,
+            dispatch_time=dispatch_time,
+            response_time=response_time,
+            response_status=Status(code=response_status)
+        )
+
+        kwargs = {
+            "first_attempt": task.first_attempt or attempt,
+            "last_attempt": attempt
+        }
+
+        task.MergeFrom(Task(**kwargs))
 
         assert(task)
         return task

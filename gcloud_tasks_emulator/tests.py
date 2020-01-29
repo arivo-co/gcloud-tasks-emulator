@@ -159,7 +159,10 @@ class TestCase(BaseTestCase):
         response = self._client.create_task(path, task)
         self.assertTrue(response.name.startswith(path))
 
-        with sleuth.fake("server._make_task_request", return_value=None) as fake:
+        class FakeResponse:
+            status = 200
+
+        with sleuth.fake("server._make_task_request", return_value=FakeResponse()) as fake:
             self._client.run_task(response.name)
 
         # Should return NOT_FOUND
