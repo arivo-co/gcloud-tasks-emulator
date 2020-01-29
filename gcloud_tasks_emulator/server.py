@@ -1,21 +1,19 @@
 
-from datetime import datetime
 import logging
-import time
 import threading
-import grpc
-import os
+import time
 from concurrent import futures
-from urllib import request, error
-from google.protobuf import empty_pb2
-from google.cloud.tasks_v2.proto import cloudtasks_pb2
-from google.cloud.tasks_v2.proto import cloudtasks_pb2_grpc
-from google.cloud.tasks_v2.proto import queue_pb2
-from google.cloud.tasks_v2.proto import task_pb2
-from google.protobuf.timestamp_pb2 import Timestamp
-from google.api_core.exceptions import NotFound
-from google.rpc.status_pb2 import Status
+from datetime import datetime
+from urllib import error, request
+from urllib.parse import parse_qs
 
+import grpc
+from google.api_core.exceptions import NotFound
+from google.cloud.tasks_v2.proto import (cloudtasks_pb2, cloudtasks_pb2_grpc,
+                                         queue_pb2, task_pb2)
+from google.protobuf import empty_pb2
+from google.protobuf.timestamp_pb2 import Timestamp
+from google.rpc.status_pb2 import Status
 
 Queue = queue_pb2.Queue
 Task = task_pb2.Task
@@ -25,7 +23,7 @@ Attempt = task_pb2.Attempt
 logger = logging.getLogger("gcloud-tasks-emulator")
 
 
-def _make_task_request(queue_name, task):
+def _make_task_request(queue_name, task, port):
     logger.info("[TASKS] Submitting task %s", task.name)
 
     headers = {}
@@ -35,7 +33,7 @@ def _make_task_request(queue_name, task):
         data = task.app_engine_http_request.body
 
         url = "http://localhost:%s%s" % (
-            int(os.environ.get("APP_ENGINE_TARGET_PORT", "80")),
+            port,
             task.app_engine_http_request.relative_uri
         )
 
@@ -147,8 +145,21 @@ class QueueState(object):
             # Invalid task name, raise ValueError
             raise ValueError()
 
+        # This is a special-case that does not exist
+        # one the live server and it exists so that
+        # local development servers can direct a task
+        # to run on a particular port
+        qs = task_name.rsplit("?", 1)[-1]
+        if qs:
+            params = parse_qs(qs)
+            port = int(params.get("port", [80])[0])
+            task_name = task_name.rsplit("?", 1)[0]
+        else:
+            port = 80
+
         index = None
 
+        # Locate the task in the queue
         for i, task in enumerate(self._queue_tasks[queue_name]):
             if task.name == task_name:
                 index = i
@@ -171,7 +182,7 @@ class QueueState(object):
         task = self._queue_tasks[queue_name].pop(index)  # Remove the task
         try:
             dispatch_time = now()
-            response = _make_task_request(queue_name, task)
+            response = _make_task_request(queue_name, task, port)
         except error.HTTPError as e:
             response_status = e.code
             logging.info("Error submitting task, moving to the back of the queue")
