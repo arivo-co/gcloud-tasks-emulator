@@ -172,9 +172,14 @@ class QueueState(object):
         try:
             dispatch_time = now()
             response = _make_task_request(queue_name, task)
-        except (error.HTTPError, ConnectionRefusedError):
+        except error.HTTPError as e:
+            response_status = e.code
+            logging.info("Error submitting task, moving to the back of the queue")
+            logging.info("Reason was: %s" % e.reason)
+            self._queue_tasks[queue_name].append(task)
+        except ConnectionRefusedError:
             response_status = 500
-            logger.info(
+            logger.exception(
                 "Error submitting task, moving to the back of the queue"
             )
             self._queue_tasks[queue_name].append(task)
