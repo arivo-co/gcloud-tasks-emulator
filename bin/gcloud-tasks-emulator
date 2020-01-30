@@ -23,9 +23,10 @@ if __name__ == '__main__':
 
     start = subparsers.add_parser('start', help='start the emulator')
     start.add_argument(
-        "--port", type=int, help='the port to run the server on', default=DEFAULT_PORT
+        "-p", "--port",
+        type=int, help='the port to run the server on', default=DEFAULT_PORT
     )
-    start.add_argument("--quiet", action="store_true", default=False)
+    start.add_argument("-q", "--quiet", action="store_true", default=False)
 
     args = parser.parse_args()
     if args.subcommand != "start":
