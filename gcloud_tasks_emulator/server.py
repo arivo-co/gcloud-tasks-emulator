@@ -15,6 +15,11 @@ from google.protobuf import empty_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
 from google.rpc.status_pb2 import Status
 
+
+# Time to sleep between iterations of the threads
+_LOOP_SLEEP_TIME = 0.1
+
+
 Queue = queue_pb2.Queue
 Task = task_pb2.Task
 Attempt = task_pb2.Attempt
@@ -276,7 +281,7 @@ class APIThread(threading.Thread):
         self._httpd.start()
 
         while self._is_running.is_set():
-            time.sleep(0)
+            time.sleep(_LOOP_SLEEP_TIME)
 
     def join(self, timeout=None):
         self._is_running.clear()
@@ -302,7 +307,7 @@ class Processor(threading.Thread):
             queue_names = self._state.queue_names()
             for queue in queue_names:
                 self.process_queue(queue)
-                time.sleep(0)
+            time.sleep(_LOOP_SLEEP_TIME)
 
     def _process_queue(self, queue):
         while self._is_running.is_set():
@@ -320,7 +325,7 @@ class Processor(threading.Thread):
                     logger.info("[TASKS] Processing next task %s", task.name)
                     self._state.submit_task(task.name)
 
-            time.sleep(0)
+            time.sleep(_LOOP_SLEEP_TIME)
 
     def process_queue(self, queue_name):
         if queue_name not in self._known_queues:
@@ -368,7 +373,7 @@ class Server(object):
 
             while True:
                 try:
-                    time.sleep(0.1)
+                    time.sleep(_LOOP_SLEEP_TIME)
                 except KeyboardInterrupt:
                     break
 
