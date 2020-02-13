@@ -1,23 +1,16 @@
+import time
 import unittest
-import contextlib
-import http.server
-import socketserver
-
 from unittest import TestCase as BaseTestCase
 
-from server import create_server
-
-from google.cloud.tasks_v2 import CloudTasksClient
-from google.cloud.tasks_v2.gapic.transports.cloud_tasks_grpc_transport import CloudTasksGrpcTransport
-
+import grpc
 from google.api_core.client_options import ClientOptions
 from google.api_core.exceptions import Unknown
+from google.cloud.tasks_v2 import CloudTasksClient
+from google.cloud.tasks_v2.gapic.transports.cloud_tasks_grpc_transport import \
+    CloudTasksGrpcTransport
 
 import sleuth
-import grpc
-import time
-import threading
-import os
+from server import create_server
 
 
 class TestCase(BaseTestCase):
@@ -162,7 +155,7 @@ class TestCase(BaseTestCase):
         class FakeResponse:
             status = 200
 
-        with sleuth.fake("server._make_task_request", return_value=FakeResponse()) as fake:
+        with sleuth.fake("server._make_task_request", return_value=FakeResponse()):
             self._client.run_task(response.name)
 
         # Should return NOT_FOUND
