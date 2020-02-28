@@ -15,7 +15,6 @@ from google.protobuf import empty_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
 from google.rpc.status_pb2 import Status
 
-
 # Time to sleep between iterations of the threads
 _LOOP_SLEEP_TIME = 0.1
 
@@ -190,10 +189,10 @@ class QueueState(object):
             response = _make_task_request(queue_name, task, port)
         except error.HTTPError as e:
             response_status = e.code
-            logging.info("Error submitting task, moving to the back of the queue")
-            logging.info("Reason was: %s" % e.reason)
+            logging.error("Error submitting task, moving to the back of the queue")
+            logging.error("Reason was: %s" % e.reason)
             self._queue_tasks[queue_name].append(task)
-        except ConnectionRefusedError:
+        except (ConnectionRefusedError, error.URLError):
             response_status = 500
             logger.exception(
                 "Error submitting task, moving to the back of the queue"

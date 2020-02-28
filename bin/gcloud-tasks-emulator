@@ -37,7 +37,7 @@ if __name__ == '__main__':
     root.addHandler(logging.StreamHandler())
 
     if args.quiet:
-        root.setLevel(logging.CRITICAL)
+        root.setLevel(logging.ERROR)
     else:
         root.setLevel(logging.INFO)
 
