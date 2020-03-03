@@ -20,6 +20,7 @@ class MockRequestHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
 
+
 class MockServer(threading.Thread):
     def __init__(self, port, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -38,7 +39,6 @@ class MockServer(threading.Thread):
         if self._httpd:
             self._httpd.shutdown()
             self._httpd.server_close()
-
 
 
 class TestCase(BaseTestCase):
@@ -193,6 +193,7 @@ class TestCase(BaseTestCase):
             "%s/tasks/1119129292929292929" % path,  # Not a valid task
         )
 
+
 class CustomPortTestCase(BaseTestCase):
 
     @classmethod
@@ -204,7 +205,6 @@ class CustomPortTestCase(BaseTestCase):
     @classmethod
     def tearDownClass(cls):
         cls._server.join(timeout=1)
-
 
     def setUp(self):
         self._server = create_server("localhost", 9022, 10123)
