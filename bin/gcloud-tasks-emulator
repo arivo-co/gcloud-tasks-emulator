@@ -4,14 +4,14 @@ import argparse
 import logging
 import sys
 
-from gcloud_tasks_emulator.server import create_server
+from gcloud_tasks_emulator.server import create_server, DEFAULT_TARGET_PORT
 
 # Random, apparently not often used
 DEFAULT_PORT = 9022
 
 
-def main(host, port):
-    server = create_server(host, port)
+def main(host, port, target_port):
+    server = create_server(host, port, target_port)
     return server.run()
 
 
@@ -26,6 +26,13 @@ if __name__ == '__main__':
         "-p", "--port",
         type=int, help='the port to run the server on', default=DEFAULT_PORT
     )
+
+    start.add_argument(
+        "-t", "--target-port",
+        type=int, help='the port to which the task runner will POST requests to',
+        default=DEFAULT_TARGET_PORT,
+    )
+
     start.add_argument("-q", "--quiet", action="store_true", default=False)
 
     args = parser.parse_args()
@@ -41,4 +48,4 @@ if __name__ == '__main__':
     else:
         root.setLevel(logging.INFO)
 
-    sys.exit(main("localhost", args.port))
+    sys.exit(main("localhost", args.port, args.target_port))
