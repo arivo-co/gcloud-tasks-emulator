@@ -210,6 +210,25 @@ class TestCase(BaseTestCase):
             "%s/tasks/1119129292929292929" % path,  # Not a valid task
         )
 
+    def test_default_queue_name(self):
+        server = create_server("localhost", 9023, 10124, "projects/[P]/locations/[L]/queues/[Q]")
+        server.start()
+        time.sleep(1)
+
+        transport = CloudTasksGrpcTransport(channel=grpc.insecure_channel("127.0.0.1:9023"))
+        client = CloudTasksClient(
+            transport=transport,
+            client_options=ClientOptions(api_endpoint="127.0.0.1:9023")
+        )
+
+        queues = list(client.list_queues(parent="projects/[P]/locations/[L]"))
+        self.assertEqual(len(queues), 1)
+
+        queue = queues[0]
+        self.assertEqual(queue.name, "projects/[P]/locations/[L]/queues/[Q]")
+
+        server.stop()
+
 
 class CustomPortTestCase(BaseTestCase):
 
@@ -241,18 +260,20 @@ class CustomPortTestCase(BaseTestCase):
         self._server.stop()
 
     def test_create_queue(self):
-        ret = self._client.create_queue(self._parent, {"name": "test_queue1"})
-        self.assertEqual(ret.name, "test_queue1")
+        path1 = self._client.queue_path('[PROJECT]', '[LOCATION]', "test_queue1")
+        ret = self._client.create_queue(self._parent, {"name": path1})
+        self.assertEqual(ret.name, path1)
 
-        ret = self._client.create_queue(self._parent, {"name": "test_queue2"})
-        self.assertEqual(ret.name, "test_queue2")
+        path2 = self._client.queue_path('[PROJECT]', '[LOCATION]', "test_queue2")
+        ret = self._client.create_queue(self._parent, {"name": path2})
+        self.assertEqual(ret.name, path2)
 
     def test_run_task(self):
         self.test_create_queue()  # Create a couple of queues
 
-        self._client.pause_queue("test_queue2")  # Don't run any tasks while testing
-
         path = self._client.queue_path('[PROJECT]', '[LOCATION]', "test_queue2")
+        self._client.pause_queue(path)  # Don't run any tasks while testing
+
         payload = "Hello World!"
 
         task = {
