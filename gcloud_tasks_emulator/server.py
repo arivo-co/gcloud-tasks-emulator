@@ -235,7 +235,8 @@ class Greeter(cloudtasks_pb2_grpc.CloudTasksServicer):
         return self._state.create_queue(request.parent, request.queue)
 
     def ListQueues(self, request, context):
-        return cloudtasks_pb2.ListQueuesResponse(queues=self._state.queues())
+        queues = [x for x in self._state.queues() if x.name.startswith(request.parent)]
+        return cloudtasks_pb2.ListQueuesResponse(queues=queues)
 
     def GetQueue(self, request, context):
         return self._state.queue(request.name)
@@ -351,10 +352,16 @@ class Processor(threading.Thread):
 
 
 class Server(object):
-    def __init__(self, host, port, target_port):
+    def __init__(self, host, port, target_port, default_queue_name):
         self._state = QueueState(target_port)
         self._api = APIThread(self._state, host, port)
         self._processor = Processor(self._state)
+
+        if default_queue_name:
+            parent = default_queue_name.rsplit("/", 3)[0]
+            self._state.create_queue(
+                parent, Queue(name=default_queue_name)
+            )
 
     def start(self):
         self._api.start()  # Start the API thread
@@ -380,5 +387,5 @@ class Server(object):
             self.stop()
 
 
-def create_server(host, port, target_port=DEFAULT_TARGET_PORT):
-    return Server(host, port, target_port)
+def create_server(host, port, target_port=DEFAULT_TARGET_PORT, default_queue_name=None):
+    return Server(host, port, target_port, default_queue_name)

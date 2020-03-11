@@ -10,8 +10,8 @@ from gcloud_tasks_emulator.server import create_server, DEFAULT_TARGET_PORT
 DEFAULT_PORT = 9022
 
 
-def main(host, port, target_port):
-    server = create_server(host, port, target_port)
+def main(host, port, target_port, default_queue_name):
+    server = create_server(host, port, target_port, default_queue_name)
     return server.run()
 
 
@@ -35,6 +35,12 @@ if __name__ == '__main__':
 
     start.add_argument("-q", "--quiet", action="store_true", default=False)
 
+    start.add_argument(
+        "-d", "--default-queue", type=int,
+        help="If specified will create a queue with the passed name. "
+        "Name should be in the format of projects/PROJECT_ID/locations/LOCATION_ID/queues/QUEUE_ID"
+    )
+
     args = parser.parse_args()
     if args.subcommand != "start":
         parser.print_usage()
@@ -48,4 +54,4 @@ if __name__ == '__main__':
     else:
         root.setLevel(logging.INFO)
 
-    sys.exit(main("localhost", args.port, args.target_port))
+    sys.exit(main("localhost", args.port, args.target_port, args.default_queue))
