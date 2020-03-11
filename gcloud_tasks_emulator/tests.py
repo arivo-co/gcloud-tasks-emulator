@@ -35,15 +35,29 @@ class TestCase(BaseTestCase):
 
         self._parent = self._client.location_path('[PROJECT]', '[LOCATION]')
 
+        # Create default queue
+        self._client.create_queue(
+            self._parent, {"name": "%s/queues/default" % self._parent}
+        )
+
     def tearDown(self):
         self._server.stop()
 
     def test_create_queue(self):
-        ret = self._client.create_queue(self._parent, {"name": "test_queue1"})
-        self.assertEqual(ret.name, "test_queue1")
+        queue1_path = "%s/queues/test_queue1" % self._parent
+        queue2_path = "%s/queues/test_queue2" % self._parent
 
-        ret = self._client.create_queue(self._parent, {"name": "test_queue2"})
-        self.assertEqual(ret.name, "test_queue2")
+        ret = self._client.create_queue(
+            self._parent, {"name": queue1_path}
+        )
+        self.assertEqual(ret.name, queue1_path)
+
+        ret = self._client.create_queue(
+            self._parent, {"name": queue2_path}
+        )
+        self.assertEqual(ret.name, queue2_path)
+
+        return (queue1_path, queue2_path)
 
     def test_list_queues(self):
         path = self._client.queue_path('[PROJECT]', '[LOCATION]', "default")
@@ -59,7 +73,7 @@ class TestCase(BaseTestCase):
 
         path = self._client.queue_path('[PROJECT]', '[LOCATION]', "test_queue2")
         queue = self._client.get_queue(path)
-        self.assertEqual(queue.name, "test_queue2")
+        self.assertEqual(queue.name, path)
 
     def test_delete_queue(self):
         path = self._client.queue_path('[PROJECT]', '[LOCATION]', "default")
@@ -143,9 +157,12 @@ class TestCase(BaseTestCase):
     def test_run_task(self):
         self.test_create_queue()  # Create a couple of queues
 
-        self._client.pause_queue("test_queue2")  # Don't run any tasks while testing
+        path = self._client.queue_path(
+            '[PROJECT]', '[LOCATION]', "test_queue2"
+        )
 
-        path = self._client.queue_path('[PROJECT]', '[LOCATION]', "test_queue2")
+        self._client.pause_queue(path)  # Don't run any tasks while testing
+
         payload = "Hello World!"
 
         task = {

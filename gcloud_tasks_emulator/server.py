@@ -84,7 +84,6 @@ class QueueState(object):
         return self._queues[queue.name]
 
     def create_task(self, queue, task):
-        queue_name = queue.rsplit("/", 1)[-1]
         task.name = task.name or "%s/tasks/%s" % (
             queue, int(datetime.now().timestamp())
         )
@@ -95,22 +94,24 @@ class QueueState(object):
                 task.app_engine_http_request.http_method or "POST"
             )
 
-        self._queue_tasks[queue_name].append(task)
+        self._queue_tasks[queue].append(task)
         logger.info("[TASKS] Created task %s", task.name)
         return task
 
-    def purge_queue(self, queue):
-        queue_name = queue.rsplit("/", 1)[-1]
+    def purge_queue(self, queue_name):
         if queue_name in self._queues:
             # Wipe the tasks out
             logger.info("[TASKS] Purging queue %s", queue_name)
             self._queue_tasks[queue_name] = []
             return self._queues[queue_name]
         else:
-            raise ValueError()
+            logger.error(
+                "[TASKS] Tried to purge an invalid queue: %s",
+                queue_name
+            )
+            raise ValueError("Invalid queue: %s" % queue_name)
 
-    def pause_queue(self, queue):
-        queue_name = queue.rsplit("/", 1)[-1]
+    def pause_queue(self, queue_name):
         if queue_name in self._queues:
             logger.info("[TASKS] Pausing queue %s", queue_name)
             self._queues[queue_name].state = (
@@ -118,10 +119,13 @@ class QueueState(object):
             )
             return self._queues[queue_name]
         else:
-            raise ValueError()
+            logger.error(
+                "[TASKS] Tried to pause an invalid queue: %s",
+                queue_name
+            )
+            raise ValueError("Invalid queue: %s" % queue_name)
 
-    def list_tasks(self, queue):
-        queue_name = queue.rsplit("/", 1)[-1]
+    def list_tasks(self, queue_name):
         return self._queue_tasks[queue_name]
 
     def queue_names(self):
@@ -143,7 +147,7 @@ class QueueState(object):
 
     def submit_task(self, task_name):
         try:
-            queue_name = task_name.rsplit("/")[-3]
+            queue_name = task_name.rsplit("/", 2)[0]
             if queue_name not in self._queue_tasks:
                 raise ValueError("Not a valid queue")
         except IndexError:
@@ -233,8 +237,7 @@ class Greeter(cloudtasks_pb2_grpc.CloudTasksServicer):
         return cloudtasks_pb2.ListQueuesResponse(queues=self._state.queues())
 
     def GetQueue(self, request, context):
-        queue_name = request.name.rsplit("/", 1)[-1]
-        return self._state.queue(queue_name)
+        return self._state.queue(request.name)
 
     def PauseQueue(self, request, context):
         return self._state.pause_queue(request.name)
@@ -248,8 +251,7 @@ class Greeter(cloudtasks_pb2_grpc.CloudTasksServicer):
         )
 
     def DeleteQueue(self, request, context):
-        queue_name = request.name.rsplit("/", 1)[-1]
-        self._state.delete_queue(queue_name)
+        self._state.delete_queue(request.name)
         return empty_pb2.Empty()
 
     def CreateTask(self, request, context):
@@ -350,10 +352,6 @@ class Processor(threading.Thread):
 class Server(object):
     def __init__(self, host, port):
         self._state = QueueState()
-
-        # Always start with a default queue (like App Engine)
-        self._state.create_queue("", Queue(name="default"))
-
         self._api = APIThread(self._state, host, port)
         self._processor = Processor(self._state)
 
