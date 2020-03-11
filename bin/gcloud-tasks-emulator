@@ -36,7 +36,7 @@ if __name__ == '__main__':
     start.add_argument("-q", "--quiet", action="store_true", default=False)
 
     start.add_argument(
-        "-d", "--default-queue", type=int,
+        "-d", "--default-queue", type=str,
         help="If specified will create a queue with the passed name. "
         "Name should be in the format of projects/PROJECT_ID/locations/LOCATION_ID/queues/QUEUE_ID"
     )
