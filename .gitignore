@@ -3,3 +3,7 @@
 .tox*
 .env
 .vscode
+.venv
+.reports
+build
+dist

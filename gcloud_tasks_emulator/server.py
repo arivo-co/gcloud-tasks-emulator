@@ -15,10 +15,10 @@ from google.protobuf import empty_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
 from google.rpc.status_pb2 import Status
 
-
 # Time to sleep between iterations of the threads
 _LOOP_SLEEP_TIME = 0.1
 
+DEFAULT_TARGET_PORT = 80
 
 Queue = queue_pb2.Queue
 Task = task_pb2.Task
@@ -66,9 +66,10 @@ class QueueState(object):
         so they can be processed
     """
 
-    def __init__(self):
+    def __init__(self, target_port):
         self._queues = {}
         self._queue_tasks = {}
+        self._target_port = target_port
 
     def create_queue(self, parent, queue):
         assert(queue.name)
@@ -161,10 +162,10 @@ class QueueState(object):
         qs = task_name.rsplit("?", 1)[-1]
         if qs:
             params = parse_qs(qs)
-            port = int(params.get("port", [80])[0])
+            port = int(params.get("port", [self._target_port])[0])
             task_name = task_name.rsplit("?", 1)[0]
         else:
-            port = 80
+            port = self._target_port
 
         index = None
 
@@ -194,10 +195,10 @@ class QueueState(object):
             response = _make_task_request(queue_name, task, port)
         except error.HTTPError as e:
             response_status = e.code
-            logging.info("Error submitting task, moving to the back of the queue")
-            logging.info("Reason was: %s" % e.reason)
+            logging.error("Error submitting task, moving to the back of the queue")
+            logging.error("Reason was: %s" % e.reason)
             self._queue_tasks[queue_name].append(task)
-        except ConnectionRefusedError:
+        except (ConnectionRefusedError, error.URLError):
             response_status = 500
             logger.exception(
                 "Error submitting task, moving to the back of the queue"
@@ -350,8 +351,8 @@ class Processor(threading.Thread):
 
 
 class Server(object):
-    def __init__(self, host, port):
-        self._state = QueueState()
+    def __init__(self, host, port, target_port):
+        self._state = QueueState(target_port)
         self._api = APIThread(self._state, host, port)
         self._processor = Processor(self._state)
 
@@ -379,5 +380,5 @@ class Server(object):
             self.stop()
 
 
-def create_server(host, port):
-    return Server(host, port)
+def create_server(host, port, target_port=DEFAULT_TARGET_PORT):
+    return Server(host, port, target_port)

@@ -1,0 +1,91 @@
+stages:
+  - prepare
+  - lint
+  - test
+  - build
+  - publish
+
+.test:
+  stage: test
+  before_script:
+    - mkdir .reports
+  artifacts:
+    reports:
+      junit: .reports/tests.xml
+
+no_needs:
+  interruptible: true
+  stage: prepare
+  dependencies: []
+  image: alpine:latest
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - echo "This build is a workaround for 'https://gitlab.com/gitlab-org/gitlab/issues/30631'"
+
+
+include:
+  - template: Code-Quality.gitlab-ci.yml
+  - template: Dependency-Scanning.gitlab-ci.yml
+  - template: SAST.gitlab-ci.yml
+
+python 3.7 test:
+  interruptible: true
+  needs: ["no_needs"]
+  extends: .test
+  image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37:latest
+  script: tox -e py37 -- --junitxml=.reports/tests.xml
+
+python 3.6 test:
+  interruptible: true
+  extends: .test
+  needs: ["no_needs"]
+  image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python36:latest
+  script: tox -e py36 -- --junitxml=.reports/tests.xml
+
+
+flake8:
+  interruptible: true
+  stage: lint
+  needs: ["no_needs"]
+  image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37:latest
+  before_script:
+    - mkdir .reports
+  script: tox -e flake8 -- --format junit-xml --output-file=".reports/flake8.xml"
+  artifacts:
+    reports:
+      junit: .reports/flake8.xml
+
+build and test-publish:
+  stage: build
+  image: python:3.7
+  only:
+    - tags
+  before_script:
+    - pip install twine setuptools wheel
+    - rm -rf dist
+    - python setup.py sdist bdist_wheel
+  script:
+    - python -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+  artifacts:
+    paths:
+      - dist
+  variables:
+    TWINE_PASSWORD: $TEST_PYPI_TOKEN
+    TWINE_USERNAME: __token__
+
+publish to prod pypi:
+  stage: publish
+  dependencies: ["build and test-publish"]
+  needs: ["build and test-publish"]
+  when: manual
+  image: python:3.7
+  only:
+    - tags
+  before_script:
+    - pip install twine
+  script:
+    - python -m twine upload --repository-url https://upload.pypi.org/legacy/ dist/*
+  variables:
+    TWINE_PASSWORD: $PROD_PYPI_TOKEN
+    TWINE_USERNAME: __token__
