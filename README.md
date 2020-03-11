@@ -28,3 +28,12 @@ client = CloudTasksClient(
     client_options=ClientOptions(api_endpoint="127.0.0.1:%s" % port)
 )
 ```
+
+## The 'default' queue
+
+By default, the emulator won't create a 'default' queue, however you can enable this
+by passing the fully-qualified name of the queue:
+
+```
+gcloud-tasks-emulator start --default-queue=projects/[PROJECT]/locations/[LOCATION]/queues/default
+```
