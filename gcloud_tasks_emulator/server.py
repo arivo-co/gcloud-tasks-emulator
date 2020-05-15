@@ -1,4 +1,3 @@
-
 import logging
 import threading
 import time
@@ -8,9 +7,9 @@ from urllib import error, request
 from urllib.parse import parse_qs
 
 import grpc
-from google.api_core.exceptions import NotFound
+from google.api_core.exceptions import NotFound, FailedPrecondition, GoogleAPICallError
 from google.cloud.tasks_v2.proto import (cloudtasks_pb2, cloudtasks_pb2_grpc,
-                                         queue_pb2, task_pb2)
+                                         queue_pb2, task_pb2, target_pb2)
 from google.protobuf import empty_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
 from google.rpc.status_pb2 import Status
@@ -24,7 +23,6 @@ Queue = queue_pb2.Queue
 Task = task_pb2.Task
 Attempt = task_pb2.Attempt
 
-
 logger = logging.getLogger("gcloud-tasks-emulator")
 
 
@@ -32,9 +30,9 @@ def _make_task_request(queue_name, task, port):
     logger.info("[TASKS] Submitting task %s", task.name)
 
     headers = {}
-    data = None
 
-    if task.app_engine_http_request:
+    if task.app_engine_http_request.relative_uri:
+        method = target_pb2.HttpMethod.Name(task.app_engine_http_request.http_method)
         data = task.app_engine_http_request.body
 
         url = "http://localhost:%s%s" % (
@@ -42,18 +40,30 @@ def _make_task_request(queue_name, task, port):
             task.app_engine_http_request.relative_uri
         )
 
+        headers.update(task.app_engine_http_request.headers)
         headers.update({
             'X-AppEngine-QueueName': queue_name,
             'X-AppEngine-TaskName': task.name.rsplit("/", 1)[-1],
-            'X-AppEngine-TaskRetryCount': 0,  # FIXME: Populate
-            'X-AppEngine-TaskExecutionCount': 0,  # FIXME: Populate
-            'X-AppEngine-TaskETA': 0,  # FIXME: Populate
+            'X-AppEngine-TaskRetryCount': 0,  # TODO
+            'X-AppEngine-TaskExecutionCount': 0,  # TODO
+            'X-AppEngine-TaskETA': 0,  # TODO
+        })
+    elif task.http_request.url:
+        method = target_pb2.HttpMethod.Name(task.http_request.http_method)
+        data = task.http_request.body
+        url = task.http_request.url
+        headers.update(task.http_request.headers)
+        headers.update({
+            'X-CloudTasks-QueueName': queue_name,
+            'X-CloudTasks-TaskName': task.name.rsplit("/", 1)[-1],
+            'X-CloudTasks-TaskRetryCount': 0,  # TODO
+            'X-CloudTasks-TaskExecutionCount': 0,  # TODO
+            'X-CloudTasks-TaskETA': 0,  # TODO
         })
     else:
-        assert(task.http_request)  # FIXME:
-        pass
+        raise ValueError("Either app_engine_http_request or http_request is required")
 
-    req = request.Request(url, data=data)
+    req = request.Request(url, method=method, data=data)
     for k, v in headers.items():
         req.add_header(k, v)
 
@@ -72,7 +82,7 @@ class QueueState(object):
         self._target_port = target_port
 
     def create_queue(self, parent, queue):
-        assert(queue.name)
+        assert (queue.name)
 
         if queue.name not in self._queues:
             self._queues[queue.name] = queue
@@ -89,11 +99,19 @@ class QueueState(object):
             queue, int(datetime.now().timestamp())
         )
 
-        if task.app_engine_http_request:
+        if task.app_engine_http_request.relative_uri:
             # Set a default http_method
             task.app_engine_http_request.http_method = (
-                task.app_engine_http_request.http_method or "POST"
+                task.app_engine_http_request.http_method or target_pb2.HttpMethod.Value("POST")
             )
+        elif task.http_request.url:
+            # Set a default http_method
+            task.http_request.http_method = (
+                task.http_request.http_method or target_pb2.HttpMethod.Value("POST")
+            )
+
+        if queue not in self._queue_tasks:
+            raise FailedPrecondition("Queue does not exist.")
 
         self._queue_tasks[queue].append(task)
         logger.info("[TASKS] Created task %s", task.name)
@@ -167,8 +185,6 @@ class QueueState(object):
         else:
             port = self._target_port
 
-        index = None
-
         # Locate the task in the queue
         for i, task in enumerate(self._queue_tasks[queue_name]):
             if task.name == task_name:
@@ -187,7 +203,6 @@ class QueueState(object):
         schedule_time = now()
         dispatch_time = None
         response_time = None
-        response_status = 200
 
         task = self._queue_tasks[queue_name].pop(index)  # Remove the task
         try:
@@ -221,46 +236,72 @@ class QueueState(object):
 
         task.MergeFrom(Task(**kwargs))
 
-        assert(task)
+        assert (task)
         return task
 
 
 class Greeter(cloudtasks_pb2_grpc.CloudTasksServicer):
     def __init__(self, state):
         super().__init__()
-
         self._state = state
 
     def CreateQueue(self, request, context):
-        return self._state.create_queue(request.parent, request.queue)
+        try:
+            return self._state.create_queue(request.parent, request.queue)
+        except GoogleAPICallError as err:
+            context.abort(err.grpc_status_code, err.message)
 
     def ListQueues(self, request, context):
-        queues = [x for x in self._state.queues() if x.name.startswith(request.parent)]
-        return cloudtasks_pb2.ListQueuesResponse(queues=queues)
+        try:
+            queues = [x for x in self._state.queues() if x.name.startswith(request.parent)]
+            return cloudtasks_pb2.ListQueuesResponse(queues=queues)
+        except GoogleAPICallError as err:
+            context.abort(err.grpc_status_code, err.message)
 
     def GetQueue(self, request, context):
-        return self._state.queue(request.name)
+        try:
+            return self._state.queue(request.name)
+        except GoogleAPICallError as err:
+            context.abort(err.grpc_status_code, err.message)
 
     def PauseQueue(self, request, context):
-        return self._state.pause_queue(request.name)
+        try:
+            return self._state.pause_queue(request.name)
+        except GoogleAPICallError as err:
+            context.abort(err.grpc_status_code, err.message)
 
     def PurgeQueue(self, request, context):
-        return self._state.purge_queue(request.name)
+        try:
+            return self._state.purge_queue(request.name)
+        except GoogleAPICallError as err:
+            context.abort(err.grpc_status_code, err.message)
 
     def ListTasks(self, request, context):
-        return cloudtasks_pb2.ListTasksResponse(
-            tasks=self._state.list_tasks(request.parent)
-        )
+        try:
+            return cloudtasks_pb2.ListTasksResponse(
+                tasks=self._state.list_tasks(request.parent)
+            )
+        except GoogleAPICallError as err:
+            context.abort(err.grpc_status_code, err.message)
 
     def DeleteQueue(self, request, context):
-        self._state.delete_queue(request.name)
-        return empty_pb2.Empty()
+        try:
+            self._state.delete_queue(request.name)
+            return empty_pb2.Empty()
+        except GoogleAPICallError as err:
+            context.abort(err.grpc_status_code, err.message)
 
     def CreateTask(self, request, context):
-        return self._state.create_task(request.parent, request.task)
+        try:
+            return self._state.create_task(request.parent, request.task)
+        except GoogleAPICallError as err:
+            context.abort(err.grpc_status_code, err.message)
 
     def RunTask(self, request, context):
-        return self._state.submit_task(request.name)
+        try:
+            return self._state.submit_task(request.name)
+        except GoogleAPICallError as err:
+            context.abort(err.grpc_status_code, err.message)
 
 
 class APIThread(threading.Thread):
