@@ -1,2 +1,2 @@
 #!/bin/bash
-docker build -t accessio/micro-tasks:0.4.0 -f Dockerfile ..
+docker build -t accessio/micro-tasks:0.4.1 -f Dockerfile ..
